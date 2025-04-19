@@ -11,9 +11,10 @@ import requests # Added for API calls
 # Assume BGE-M3 embedding function exists (same as in init_db.py)
 # from embedding_utils import get_bge_m3_embedding # Placeholder
 
-load_dotenv()
+load_dotenv(dotenv_path=".env", verbose=True)
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD") # Load Redis password
 FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", "./faiss_index.idx")
 BAAI_API_KEY = os.getenv("SF_API_KEY") # Needed if using SiliconFlow or similar
 
@@ -103,13 +104,18 @@ def get_redis_connection():
     """Establishes connection to Redis."""
     print("Connecting to Redis for app...")
     try:
-        r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
+        # Use password if provided
+        r = redis.Redis.from_url(REDIS_URL, password=REDIS_PASSWORD, decode_responses=True)
         r.ping()
         print("Redis connection successful for app.")
         return r
     except redis.exceptions.ConnectionError as e:
         st.error(f"Error connecting to Redis: {e}")
         print(f"Error connecting to Redis: {e}")
+        return None
+    except redis.exceptions.AuthenticationError:
+        st.error("Redis authentication failed. Please check REDIS_PASSWORD.")
+        print("Redis authentication failed for app. Please check REDIS_PASSWORD.")
         return None
 
 def search_articles(query: str, index, id_map, redis_client, k: int = 5):

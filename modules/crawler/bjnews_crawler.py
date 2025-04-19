@@ -7,9 +7,10 @@ import random
 import requests
 from bs4 import BeautifulSoup
 
-load_dotenv()
+load_dotenv(dotenv_path=".env", verbose=True)
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")  # Load Redis password
 DATA_PATH = os.getenv("DATA_PATH", "./data")
 
 COLUMN_ID = 9025
@@ -28,11 +29,15 @@ class BjNewsCrawler:
     def __init__(self):
         print("Initializing BjNews Crawler (API v101)...")
         try:
-            self.redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True)
+            # Use password if provided
+            self.redis_client = redis.Redis.from_url(REDIS_URL, password=REDIS_PASSWORD, decode_responses=True)
             self.redis_client.ping()
             print("Redis connection successful for crawler.")
         except redis.exceptions.ConnectionError as e:
             print(f"Error connecting to Redis in crawler: {e}")
+            self.redis_client = None
+        except redis.exceptions.AuthenticationError:
+            print("Redis authentication failed for crawler. Please check REDIS_PASSWORD.")
             self.redis_client = None
 
         if not os.path.exists(DATA_PATH):

@@ -7,9 +7,10 @@ from dotenv import load_dotenv
 import requests
 import time
 
-load_dotenv()
+load_dotenv(dotenv_path=".env", verbose=True)
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD") # Load Redis password
 FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", "./faiss_index.idx")
 DATA_PATH = os.getenv("DATA_PATH", "./data") # Assuming data is stored in files first
 BAAI_API_KEY = os.getenv("BAAI_API_KEY") # Needed if using SiliconFlow or similar
@@ -63,11 +64,15 @@ def initialize_database():
     """Loads data, generates embeddings, builds FAISS index, and stores data in Redis."""
     print("Connecting to Redis...")
     try:
-        r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
+        # Use password if provided
+        r = redis.Redis.from_url(REDIS_URL, password=REDIS_PASSWORD, decode_responses=True)
         r.ping()
         print("Redis connection successful.")
     except redis.exceptions.ConnectionError as e:
         print(f"Error connecting to Redis: {e}")
+        return
+    except redis.exceptions.AuthenticationError:
+        print("Redis authentication failed. Please check REDIS_PASSWORD.")
         return
 
     print(f"Looking for data files in: {DATA_PATH}")

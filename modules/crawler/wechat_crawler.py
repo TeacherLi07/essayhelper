@@ -7,7 +7,7 @@ import random
 # Import the actual crawler library
 from wechat_articles_spider import OfficialAccount, ArticlesInfo
 
-load_dotenv()
+load_dotenv(dotenv_path=".env", verbose=True)
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 DATA_PATH = os.getenv("DATA_PATH", "./data") # Also save raw JSON files
