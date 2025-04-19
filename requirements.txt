@@ -1,0 +1,7 @@
+streamlit
+redis
+faiss-cpu # Or faiss-gpu if you have CUDA installed
+requests # For potential API calls (like SiliconFlow)
+python-dotenv # To load environment variables from .env
+sentence-transformers # Common library for embeddings, might be needed depending on BGE-M3 usage
+# wechat_articles_spider - Note: This might require manual installation or integration, not a standard pip package.
