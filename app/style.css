@@ -1,0 +1,149 @@
+/* 主要内容区域样式 */
+.main .block-container {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+}
+
+/* 文章卡片样式 */
+.article-card {
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid rgba(49, 51, 63, 0.2);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
+
+.article-card:hover {
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+}
+
+/* 卡片头部样式 */
+.article-header {
+    margin-bottom: 0.75rem; /* 减少头部和内容的间距 */
+    padding-bottom: 0; /* 移除分隔线留下的空间 */
+}
+
+.article-header h3 {
+    margin-bottom: 0.5rem; /* 减少标题和元数据间距 */
+    font-size: 1.25rem; /* 略微调整标题大小 */
+    font-weight: 600;
+    color: rgb(49, 51, 63);
+}
+
+.article-meta {
+    display: flex;
+    justify-content: space-between; /* 让日期和相关度分开 */
+    flex-wrap: wrap; /* 允许换行 */
+    gap: 0.5rem; /* 添加元素间距 */
+    font-size: 0.85rem; /* 略微减小字体 */
+    color: rgba(49, 51, 63, 0.7);
+    background-color: rgba(28, 131, 225, 0.08); /* 将背景色移到这里 */
+    border-radius: 8px; /* 添加圆角 */
+    padding: 0.4rem 0.8rem; /* 调整内边距 */
+}
+
+.article-meta span {
+    background-color: transparent; /* 移除单个 span 的背景 */
+    border-radius: 0; /* 移除单个 span 的圆角 */
+    padding: 0; /* 移除单个 span 的内边距 */
+    display: inline-block;
+}
+
+/* 文章内容样式 */
+.article-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem; /* 减少摘要和按钮间距 */
+}
+
+.article-summary {
+    background-color: rgba(0, 0, 0, 0.02);
+    border-radius: 8px;
+    padding: 0.8rem 1rem; /* 调整摘要内边距 */
+    border-left: 3px solid rgba(28, 131, 225, 0.5);
+}
+
+.article-summary p {
+    margin: 0;
+    font-size: 0.95rem; /* 略微调整摘要字体 */
+    line-height: 1.6;
+    color: rgba(49, 51, 63, 0.85);
+}
+
+.article-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.action-button {
+    padding: 0.5rem 1.2rem;
+    border-radius: 20px;
+    background-color: rgba(28, 131, 225, 0.1);
+    color: rgb(28, 131, 225);
+    border: 1px solid rgba(28, 131, 225, 0.3);
+    font-size: 0.9rem;
+    font-weight: 500;
+    text-decoration: none;
+    display: inline-block;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.action-button:hover {
+    background-color: rgba(28, 131, 225, 0.2);
+    color: rgb(28, 131, 225);
+}
+
+/* Streamlit组件样式优化 */
+.stButton button {
+    width: 100%;
+    border-radius: 20px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    height: 2.5rem;
+}
+
+.stButton button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.stTextInput input {
+    border-radius: 20px;
+}
+
+/* 页脚样式 */
+.footer {
+    position: relative;
+    bottom: 0;
+    width: 100%;
+    text-align: center;
+    margin-top: 3rem;
+    padding: 1rem 0;
+    border-top: 1px solid rgba(49, 51, 63, 0.2);
+    font-size: 0.8rem;
+    color: rgba(49, 51, 63, 0.7);
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .article-card {
+        padding: 1rem;
+    }
+    
+    .article-meta {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .article-content {
+        flex-direction: column;
+    }
+    
+    .article-actions {
+        justify-content: center;
+    }
+}

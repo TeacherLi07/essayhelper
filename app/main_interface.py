@@ -8,6 +8,7 @@ import json
 import time
 import requests # Added for API calls
 import streamlit.components.v1 as components # Import components
+from datetime import datetime
 
 # Assume BGE-M3 embedding function exists (same as in init_db.py)
 # from embedding_utils import get_bge_m3_embedding # Placeholder
@@ -18,6 +19,10 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD") # Load Redis password
 FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", "./faiss_index.idx")
 BAAI_API_KEY = os.getenv("SF_API_KEY") # Needed if using SiliconFlow or similar
+
+def load_external_css(file_path):
+    with open(file_path) as f:
+        st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 
 # --- Updated Embedding Function (SiliconFlow API) ---
 # IMPORTANT: Use the *exact same* embedding logic as in init_db.py
@@ -67,7 +72,6 @@ def get_embedding(text: str, retries=3, delay=5) -> np.ndarray | None:
              st.error(f"An unexpected error occurred while generating embedding: {e}")
              return None
     return None
-# --- End Embedding Function ---
 
 @st.cache_resource
 def load_faiss_index():
@@ -161,95 +165,195 @@ def search_articles(query: str, index, id_map, redis_client, k: int = 5):
             else:
                  print(f"Warning: Could not map FAISS index {faiss_indices[0][i]} to an article ID.")
 
-
     end_time = time.time()
-    print(f"Search completed in {end_time - start_time:.2f} seconds. Found {len(results)} results.")
+    search_time = end_time - start_time
+    print(f"Search completed in {search_time:.2f} seconds. Found {len(results)} results.")
     results.reverse()
-    return results
+    return results, search_time
+
 
 # --- Streamlit UI ---
-st.set_page_config(page_title="📝 EssayHelper", layout="wide")
-st.title("📝 EssayHelper - 议论文写作智能助手")
-st.caption("基于 BGE-M3 的全文本语义检索系统 | 新京报书评周刊")
+st.set_page_config(
+    page_title="📝 EssayHelper", 
+    layout="wide",
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get Help': 'https://github.com/teacherli07/essayhelper/issues',
+        'Report a bug': 'https://github.com/teacherli07/essayhelper/issues/new',
+        'About': "📝 EssayHelper - 议论文写作助手 | 基于 BGE-M3 的语义检索系统"
+    }
+)
 
-# Load resources
-faiss_index, faiss_id_map = load_faiss_index()
-redis_conn = get_redis_connection()
+# Load external CSS file
+css_file_path = os.path.join(os.path.dirname(__file__), "style.css")
+if os.path.exists(css_file_path):
+    load_external_css(css_file_path)
+else:
+    st.warning("style.css not found. Custom styles will not be applied.")
 
-# Input section
-query = st.text_input("输入议论文主题或论点描述:", placeholder="例如：讨论人工智能伦理问题")
-num_results = st.slider("选择返回文章数量:", min_value=1, max_value=20, value=5)
+# 主页面标题与简介
+col1, col2, col3 = st.columns([4, 1, 1])
+with col1:
+    st.title("📝 EssayHelper - 议论文写作助手")
 
-if st.button("开始检索", type="primary", disabled=(faiss_index is None or redis_conn is None)):
+# 加载资源（静默加载不显示成功信息）
+with st.spinner("正在加载索引和连接数据库..."):
+    faiss_index, faiss_id_map = load_faiss_index()
+    redis_conn = get_redis_connection()
+    if faiss_index is None or redis_conn is None:
+        st.error("⚠️ 系统初始化失败，请检查索引文件和数据库连接")
+
+# 简化的搜索区域，直接突出功能
+col1, col2 = st.columns([3, 1])
+with col1:
+    query = st.text_input("输入关键词或论点进行文章检索:", 
+                        placeholder="我们的劳动使大地改变了模样，在大地的模样里我们看到了自己。", 
+                        help="输入与您议论文相关的主题词或论点描述")
+with col2:
+    num_results = st.slider("文章数量:", min_value=1, max_value=20, value=10, 
+                          help="相关度由高到低排序")
+
+search_button = st.button("🔍 开始检索", 
+                        type="primary", 
+                        disabled=(faiss_index is None or redis_conn is None),
+                        help="点击开始检索")
+
+# 显示检索结果
+if search_button:
     if query:
-        with st.spinner("正在检索相关文章..."):
-            search_results = search_articles(query, faiss_index, faiss_id_map, redis_conn, k=num_results)
+        with st.spinner("🔍 正在检索相关文章..."):
+            search_results, search_time = search_articles(query, faiss_index, faiss_id_map, redis_conn, k=num_results)
 
         if search_results:
-            st.success(f"找到 {len(search_results)} 篇相关文章：")
-            links_html_to_modify = [] # Store links temporarily
-
+            st.success(f"✅ 找到 {len(search_results)} 篇相关文章 (用时 {search_time:.2f} 秒)：")
+            
+            # 显示每篇文章的卡片
             for i, result in enumerate(search_results):
-                st.subheader(f"{i+1}. {result.get('title', '无标题')}")
-                st.markdown(f"**发布日期:** {result.get('publish_date', '未知')} | **相关度得分:** {result.get('score', 'N/A'):.4f}")
+                with st.container():
+                    # Ensure result is a dictionary before proceeding
+                    if not isinstance(result, dict):
+                        st.warning(f"Skipping invalid result item #{i+1} (expected dict, got {type(result)}).")
+                        continue
 
-                # --- Render link with a specific class using st.markdown ---
-                link_url = result.get("url", "#")
-                # Add class="conditional-link"
-                link_html = f'<a href="{link_url}" target="_blank" rel="noopener noreferrer" class="conditional-link">阅读原文</a>'
-                st.markdown(link_html, unsafe_allow_html=True)
-                # --- End Link Rendering ---
+                    # 准备摘要内容
+                    desc = '无摘要' # Default value
+                    row_data = result.get('row')
 
-                # Optionally show a snippet of the content
-                # content_snippet = result.get('content', '')[:200] + "..." if result.get('content') else "无内容"
-                # st.markdown(f"> {content_snippet}")
-                st.divider()
+                    if isinstance(row_data, dict):
+                        # If 'row' is already a dictionary
+                        desc = row_data.get('desc', '无摘要')
+                    elif isinstance(row_data, str):
+                        # If 'row' is a JSON string, try to parse it
+                        try:
+                            parsed_row = json.loads(row_data)
+                            if isinstance(parsed_row, dict):
+                                desc = parsed_row.get('desc', '无摘要')
+                            else:
+                                # Parsed JSON is not a dict, maybe just use the string itself?
+                                desc = row_data[:300] + "..." if len(row_data) > 300 else row_data
+                        except json.JSONDecodeError:
+                            # If parsing fails, use the string directly as fallback
+                            print(f"Warning: Could not parse 'row' field as JSON for result {i+1}. Using raw string.")
+                            desc = row_data[:300] + "..." if len(row_data) > 300 else row_data
+                    else:
+                        # Fallback to 'content' if 'row' is missing or not dict/str
+                        content = result.get('content', '无摘要')
+                        desc = content[:300] + "..." if len(content) > 300 else content
+                    
+                    # Ensure desc is not empty before displaying
+                    if not desc:
+                        desc = '无摘要'
 
-            # --- Use components.html AFTER the loop to execute JS targeting the parent document ---
-            script_component = f"""
-<script>
-// Wait a short moment for Streamlit to finish rendering the links in the parent document
-setTimeout(function() {{
-    try {{
-        // Target links in the main document (outside the iframe)
-        var links = window.parent.document.querySelectorAll('.conditional-link');
-        console.log('[Component Script] Found conditional links in parent:', links.length);
+                    # 创建统一的文章卡片
+                    # 使用 st.html() 替代 st.markdown() 以确保 HTML 正确渲染
+                    st.html(f"""
+                    <div class="article-card">
+                        <div class="article-header">
+                            <h3>{i+1}. {result.get('title', '无标题')}</h3>
+                            <div class="article-meta">
+                                <span>📅 {result.get('publish_date', '未知')}</span>
+                                <span>相关度: {result.get('score', 'N/A'):.4f}</span>
+                            </div>
+                        </div>
+                        
+                        <div class="article-content">
+                            <div class="article-summary">
+                                <p>{desc}</p>
+                            </div>
+                            <div class="article-actions">
+                                <a href="{result.get('url', '#')}" target="_blank" rel="noopener noreferrer" class="action-button">阅读原文</a>
+                            </div>
+                        </div>
+                    </div>
+                    """)
 
-        // Check if running inside WeChat
-        if (/MicroMessenger/i.test(navigator.userAgent)) {{
-            console.log('[Component Script] WeChat detected, changing target to _self');
-            // If in WeChat, iterate through the links and change target to _self
-            links.forEach(function(link) {{
-                link.target = '_self';
-                link.removeAttribute('rel'); // Remove rel as it's not needed for _self
-                console.log('[Component Script] Changed target for:', link.href);
-            }});
-        }} else {{
-            console.log('[Component Script] Not in WeChat, keeping target _blank');
-        }}
-    }} catch (e) {{
-        console.error('[Component Script] Error accessing parent document or modifying links:', e);
-    }}
-}}, 500); // Delay execution by 500 milliseconds (adjust if needed)
-</script>
-"""
-            # Render the component; height=0 makes it invisible
+            # WeChat链接处理脚本
+            script_component = """
+            <script>
+            setTimeout(function() {
+                try {
+                    var links = window.parent.document.querySelectorAll('.conditional-link');
+                    console.log('[Component Script] Found conditional links in parent:', links.length);
+
+                    if (/MicroMessenger/i.test(navigator.userAgent)) {
+                        console.log('[Component Script] WeChat detected, changing target to _self');
+                        links.forEach(function(link) {
+                            link.target = '_self';
+                            link.removeAttribute('rel');
+                            console.log('[Component Script] Changed target for:', link.href);
+                        });
+                    } else {
+                        console.log('[Component Script] Not in WeChat, keeping target _blank');
+                    }
+                } catch (e) {
+                    console.error('[Component Script] Error accessing parent document or modifying links:', e);
+                }
+            }, 500);
+            </script>
+            """
             components.html(script_component, height=0)
-            # --- End JavaScript Component ---
 
         else:
-            st.warning("未能找到与查询相关的文章。")
+            st.warning("⚠️ 未能找到与查询相关的文章。请尝试调整关键词。")
     else:
-        st.warning("请输入查询内容。")
+        st.warning("⚠️ 请输入查询内容。")
 
-st.sidebar.info(
-    """
-    **使用说明:**
-    1. 在输入框键入论题描述。
-    2. 通过滑动条选择返回文章数量。
-    3. 点击「开始检索」。
-    4. 点击文章链接跳转原文。
-    """
-)
-st.sidebar.caption(f"FAISS Index Status: {'Loaded' if faiss_index else 'Not Loaded'}")
-st.sidebar.caption(f"Redis Status: {'Connected' if redis_conn else 'Not Connected'}")
+# 侧边栏设置
+with st.sidebar:
+    # st.image("https://raw.githubusercontent.com/teacherli07/essayhelper/main/static/logo.png", width=50)
+    st.markdown("## 📋 使用指南")
+    
+    st.info(
+        """
+**使用说明:**
+
+1. 在输入框键入论题描述。
+2. 通过滑动条选择返回文章数量。
+3. 点击「开始检索」。
+        """
+    )
+
+    # 显示系统状态
+    st.markdown("## 🔧 系统状态")
+    if faiss_index:
+        st.success(f"✅ 索引已加载 | 文章总数: {faiss_index.ntotal}")
+    else:
+        st.error("❌ 索引未加载")
+        
+    if redis_conn:
+        st.success("✅ Redis数据库已连接")
+    else:
+        st.error("❌ Redis数据库未连接")
+    
+    # 关于区域
+    st.markdown("## ℹ️ 关于")
+    st.markdown("[GitHub 项目仓库](https://github.com/TeacherLi07/essayhelper)")
+    st.caption("基于 BGE-M3 的开源议论文写作辅助工具")
+
+# 添加页脚
+footer = """
+<div class="footer">
+    <p>© 2025 TeacherLi | 基于 BGE-M3 的议论文语义检索系统</p>
+</div>
+"""
+st.markdown(footer, unsafe_allow_html=True)
