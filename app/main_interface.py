@@ -9,6 +9,7 @@ import time
 import requests # Added for API calls
 import streamlit.components.v1 as components # Import components
 from datetime import datetime
+import hashlib # Add hashlib for generating cache keys
 
 # Assume BGE-M3 embedding function exists (same as in init_db.py)
 # from embedding_utils import get_bge_m3_embedding # Placeholder
@@ -124,52 +125,92 @@ def get_redis_connection():
         return None
 
 def search_articles(query: str, index, id_map, redis_client, k: int = 5):
-    """Searches for articles using the query."""
+    """Searches for articles using the query, with persistent Redis storage."""
     if index is None or redis_client is None or id_map is None:
         st.error("Search cannot proceed. Index or Redis connection missing.")
-        return []
+        return [], 0.0, False # Added cache_hit flag
 
-    print(f"Searching for top {k} articles related to: '{query}'")
+    # Normalize query and generate cache key
+    normalized_query = query.strip().lower()
+    query_hash = hashlib.md5(normalized_query.encode('utf-8')).hexdigest()
+    # Always work with max_k=30 for storage/retrieval
+    max_k = 30
+    cache_key = f"cache:query:{query_hash}:k{max_k}"
+
+    print(f"Searching for top {k} articles related to: '{query}' (Normalized: '{normalized_query}')")
     start_time = time.time()
+    cache_hit = False
 
-    # 1. Generate embedding for the query
+    # 1. Check persistent storage (cache)
+    try:
+        cached_results_json = redis_client.get(cache_key)
+        if cached_results_json:
+            print(f"Persistent storage hit for key: {cache_key}")
+            cached_results = json.loads(cached_results_json)
+            # Slice the cached results (up to 30) to the requested k
+            results = cached_results[:k]
+            end_time = time.time()
+            search_time = end_time - start_time
+            cache_hit = True
+            print(f"Search completed from persistent storage in {search_time:.4f} seconds. Found {len(results)} results (returning top {k}).")
+            return results, search_time, cache_hit
+        else:
+            print(f"Persistent storage miss for key: {cache_key}")
+    except Exception as e:
+        print(f"Error checking or reading from Redis storage: {e}")
+        # Proceed with normal search if storage check fails
+
+    # --- Storage Miss Logic ---
+    # 2. Generate embedding for the query
     query_embedding = get_embedding(query)
     if query_embedding is None:
         st.error("Failed to generate embedding for the query. Cannot perform search.")
-        return [] # Return empty list if embedding fails
+        return [], 0.0, False # Return empty list, time, cache_hit=False
 
     query_embedding_np = np.array([query_embedding]).astype('float32')
-    # faiss.normalize_L2(query_embedding_np) # Normalize if using IndexFlatIP
 
-    # 2. Search the FAISS index
-    # D = distances, I = indices (internal FAISS integer IDs)
-    distances, faiss_indices = index.search(query_embedding_np, k)
+    # 3. Search the FAISS index (always search for max_k=30)
+    distances, faiss_indices = index.search(query_embedding_np, max_k)
 
-    results = []
+    all_results_for_storage = []
     if len(faiss_indices[0]) > 0:
-        # 3. Retrieve original article data from Redis using the mapped IDs
-        retrieved_ids = [id_map.get(int(i)) for i in faiss_indices[0] if int(i) in id_map] # Map FAISS int IDs back to string IDs
+        # 4. Retrieve original article data from Redis using the mapped IDs
+        retrieved_ids = [id_map.get(int(i)) for i in faiss_indices[0] if int(i) in id_map]
         print(f"Retrieved FAISS indices: {faiss_indices[0]}")
         print(f"Mapped article IDs: {retrieved_ids}")
 
-
         for i, article_id in enumerate(retrieved_ids):
-            if article_id: # Check if mapping was successful
+            if article_id:
                 redis_key = f"article:{article_id}"
                 article_data = redis_client.hgetall(redis_key)
                 if article_data:
-                    article_data['score'] = float(distances[0][i]) # Add similarity score
-                    results.append(article_data)
+                    try:
+                        article_data['score'] = float(distances[0][i])
+                    except (ValueError, IndexError):
+                         article_data['score'] = 0.0
+                    all_results_for_storage.append(article_data)
                 else:
                     print(f"Warning: Article data not found in Redis for ID: {article_id}")
             else:
                  print(f"Warning: Could not map FAISS index {faiss_indices[0][i]} to an article ID.")
 
+    # 5. Store results in persistent storage (store all max_k results without TTL)
+    if all_results_for_storage:
+        try:
+            results_json = json.dumps(all_results_for_storage)
+            # Store persistently without expiration (removed ex=...)
+            redis_client.set(cache_key, results_json)
+            print(f"Stored {len(all_results_for_storage)} results in persistent storage for key: {cache_key}")
+        except Exception as e:
+            print(f"Error storing results to Redis storage: {e}")
+
     end_time = time.time()
     search_time = end_time - start_time
-    print(f"Search completed in {search_time:.2f} seconds. Found {len(results)} results.")
-    results.reverse()
-    return results, search_time
+    print(f"Search completed in {search_time:.2f} seconds. Found {len(all_results_for_storage)} results (returning top {k}).")
+
+    # Slice results to the requested k for the current response
+    results = all_results_for_storage[:k]
+    return results, search_time, cache_hit # cache_hit is False here
 
 
 # --- Streamlit UI ---
@@ -208,7 +249,7 @@ col1, col2 = st.columns([3, 1])
 with col1:
     query = st.text_area("输入作文题或论点进行文章检索:", 
                         placeholder="我们的劳动使大地改变了模样，在大地的模样里我们看到了自己。", 
-                        help="直接以作文题搜索，若观点不明确可能导致相关度较低。建议列出提纲或分论点检索。\n最长支持超8k字符。",
+                        help="若直接以作文题搜索，可能因观点不明确导致相关度较低。建议列出提纲或分论点检索，最长支持8k字符。",
                         height=100)
 with col2:
     num_results = st.slider("文章数量:", min_value=1, max_value=30, value=10, 
@@ -223,12 +264,15 @@ search_button = st.button("🔍 开始检索",
 if search_button:
     if query:
         with st.spinner("🔍 正在检索相关文章..."):
-            search_results, search_time = search_articles(query, faiss_index, faiss_id_map, redis_conn, k=num_results)
+            search_results, search_time, cache_hit = search_articles(query, faiss_index, faiss_id_map, redis_conn, k=num_results)
+
+        # Display cache hit message if applicable
+        if cache_hit:
+            st.info(f"✅ 找到 {len(search_results)} 篇相关文章 (缓存命中，用时 {search_time:.2f} 秒)：")
+        elif search_results: # Only show success if not a cache hit and results found
+             st.success(f"✅ 找到 {len(search_results)} 篇相关文章 (用时 {search_time:.2f} 秒)：")
 
         if search_results:
-            st.success(f"✅ 找到 {len(search_results)} 篇相关文章 (用时 {search_time:.2f} 秒)：")
-            
-            # 显示每篇文章的卡片
             for i, result in enumerate(search_results):
                 with st.container():
                     # Ensure result is a dictionary before proceeding
@@ -241,32 +285,24 @@ if search_button:
                     row_data = result.get('row')
 
                     if isinstance(row_data, dict):
-                        # If 'row' is already a dictionary
                         desc = row_data.get('desc', '无摘要')
                     elif isinstance(row_data, str):
-                        # If 'row' is a JSON string, try to parse it
                         try:
                             parsed_row = json.loads(row_data)
                             if isinstance(parsed_row, dict):
                                 desc = parsed_row.get('desc', '无摘要')
                             else:
-                                # Parsed JSON is not a dict, maybe just use the string itself?
                                 desc = row_data[:300] + "..." if len(row_data) > 300 else row_data
                         except json.JSONDecodeError:
-                            # If parsing fails, use the string directly as fallback
                             print(f"Warning: Could not parse 'row' field as JSON for result {i+1}. Using raw string.")
                             desc = row_data[:300] + "..." if len(row_data) > 300 else row_data
                     else:
-                        # Fallback to 'content' if 'row' is missing or not dict/str
                         content = result.get('content', '无摘要')
                         desc = content[:300] + "..." if len(content) > 300 else content
                     
-                    # Ensure desc is not empty before displaying
                     if not desc:
                         desc = '无摘要'
 
-                    # 创建统一的文章卡片
-                    # 使用 st.html() 替代 st.markdown() 以确保 HTML 正确渲染
                     st.html(f"""
                     <div class="article-card">
                         <div class="article-header">
@@ -282,13 +318,12 @@ if search_button:
                                 <p>{desc}</p>
                             </div>
                             <div class="article-actions">
-                                <a href="{result.get('url', '#')}" target="_blank" rel="noopener noreferrer" class="action-button">阅读原文</a>
+                                <a href="{result.get('url', '#')}" target="_blank" rel="noopener noreferrer" class="action-button conditional-link">阅读原文</a>
                             </div>
                         </div>
                     </div>
                     """)
 
-            # WeChat链接处理脚本
             script_component = """
             <script>
             setTimeout(function() {
@@ -314,14 +349,13 @@ if search_button:
             """
             components.html(script_component, height=0)
 
-        else:
+        elif not cache_hit:
             st.warning("⚠️ 未能找到与查询相关的文章。请尝试调整关键词。")
     else:
         st.warning("⚠️ 请输入查询内容。")
 
 # 侧边栏设置
 with st.sidebar:
-    # st.image("https://raw.githubusercontent.com/teacherli07/essayhelper/main/static/logo.png", width=50)
     st.markdown("## 📋 使用指南")
     
     st.info(
@@ -334,7 +368,6 @@ with st.sidebar:
         """
     )
 
-    # 显示系统状态
     st.markdown("## 🔧 系统状态")
     if faiss_index:
         st.success(f"✅ 索引已加载 | 文章总数: {faiss_index.ntotal}")
@@ -346,12 +379,10 @@ with st.sidebar:
     else:
         st.error("❌ Redis数据库未连接")
     
-    # 关于区域
     st.markdown("## ℹ️ 关于")
     st.markdown("[GitHub 项目仓库](https://github.com/TeacherLi07/essayhelper)")
     st.caption("基于 BGE-M3 的开源议论文写作辅助工具")
 
-# 添加页脚
 footer = """
 <div class="footer">
     <p>© 2025 TeacherLi | 基于 BGE-M3 的议论文语义检索系统</p>
