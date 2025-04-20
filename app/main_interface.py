@@ -18,10 +18,9 @@ from ui_utils import (
 st.set_page_config(
     page_title="📝 EssayHelper",
     layout="wide", # 使用宽布局
-    initial_sidebar_state="expanded", # 默认展开侧边栏
+    initial_sidebar_state="auto", # 默认展开侧边栏
     menu_items={
-        'Get Help': 'https://github.com/teacherli07/essayhelper/issues',
-        'Report a bug': 'https://github.com/teacherli07/essayhelper/issues/new',
+        'Report a Bug': 'https://github.com/teacherli07/essayhelper/issues',
         'About': "📝 EssayHelper - 议论文写作助手 | 基于 BGE-M3 的语义检索系统"
     }
 )

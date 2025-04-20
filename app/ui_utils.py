@@ -3,6 +3,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import json
 from config import SUMMARY_TRUNCATE_LENGTH
+from feedback_utils import handle_feedback  # 使用相对导入
 
 
 def load_external_css(file_path):
@@ -177,6 +178,31 @@ def display_sidebar(faiss_index, redis_conn):
             5. 点击“阅读原文”可跳转至原始文章链接（如果可用）。
             """
         )
+
+        # --- 新增：用户反馈区域 ---
+        st.markdown("## 💬 问题反馈")
+        # 只有当 Redis 连接正常时才显示反馈表单
+        if redis_conn:
+            with st.form("feedback_form", clear_on_submit=True):
+                feedback_text = st.text_area(
+                    "有问题？有建议？",
+                    height=150,
+                    placeholder="都可以谈，有什么不能谈的.jpg",
+                    help="我们会认真听取每一条建议"
+                )
+                submitted = st.form_submit_button("提交反馈")
+
+                if submitted:
+                    # 调用 feedback_utils 中的处理函数
+                    success, message = handle_feedback(redis_conn, feedback_text)
+                    if success:
+                        st.success(message)
+                    else:
+                        st.error(message)
+        else:
+            # 如果 Redis 连接失败，显示提示信息而不是表单
+            st.warning("⚠️ 反馈功能当前不可用，因为数据库连接失败。")
+        # --- 反馈区域结束 ---
 
         st.markdown("---") # 分隔线
 
