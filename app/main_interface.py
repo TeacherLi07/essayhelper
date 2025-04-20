@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 import json
 import time
 import requests # Added for API calls
+import streamlit.components.v1 as components # Import components
 
 # Assume BGE-M3 embedding function exists (same as in init_db.py)
 # from embedding_utils import get_bge_m3_embedding # Placeholder
@@ -163,6 +164,7 @@ def search_articles(query: str, index, id_map, redis_client, k: int = 5):
 
     end_time = time.time()
     print(f"Search completed in {end_time - start_time:.2f} seconds. Found {len(results)} results.")
+    results.reverse()
     return results
 
 # --- Streamlit UI ---
@@ -185,14 +187,56 @@ if st.button("开始检索", type="primary", disabled=(faiss_index is None or re
 
         if search_results:
             st.success(f"找到 {len(search_results)} 篇相关文章：")
+            links_html_to_modify = [] # Store links temporarily
+
             for i, result in enumerate(search_results):
                 st.subheader(f"{i+1}. {result.get('title', '无标题')}")
                 st.markdown(f"**发布日期:** {result.get('publish_date', '未知')} | **相关度得分:** {result.get('score', 'N/A'):.4f}")
-                st.markdown(f"[阅读原文]({result.get('url', '#')})", unsafe_allow_html=True)
+
+                # --- Render link with a specific class using st.markdown ---
+                link_url = result.get("url", "#")
+                # Add class="conditional-link"
+                link_html = f'<a href="{link_url}" target="_blank" rel="noopener noreferrer" class="conditional-link">阅读原文</a>'
+                st.markdown(link_html, unsafe_allow_html=True)
+                # --- End Link Rendering ---
+
                 # Optionally show a snippet of the content
                 # content_snippet = result.get('content', '')[:200] + "..." if result.get('content') else "无内容"
                 # st.markdown(f"> {content_snippet}")
                 st.divider()
+
+            # --- Use components.html AFTER the loop to execute JS targeting the parent document ---
+            script_component = f"""
+<script>
+// Wait a short moment for Streamlit to finish rendering the links in the parent document
+setTimeout(function() {{
+    try {{
+        // Target links in the main document (outside the iframe)
+        var links = window.parent.document.querySelectorAll('.conditional-link');
+        console.log('[Component Script] Found conditional links in parent:', links.length);
+
+        // Check if running inside WeChat
+        if (/MicroMessenger/i.test(navigator.userAgent)) {{
+            console.log('[Component Script] WeChat detected, changing target to _self');
+            // If in WeChat, iterate through the links and change target to _self
+            links.forEach(function(link) {{
+                link.target = '_self';
+                link.removeAttribute('rel'); // Remove rel as it's not needed for _self
+                console.log('[Component Script] Changed target for:', link.href);
+            }});
+        }} else {{
+            console.log('[Component Script] Not in WeChat, keeping target _blank');
+        }}
+    }} catch (e) {{
+        console.error('[Component Script] Error accessing parent document or modifying links:', e);
+    }}
+}}, 500); // Delay execution by 500 milliseconds (adjust if needed)
+</script>
+"""
+            # Render the component; height=0 makes it invisible
+            components.html(script_component, height=0)
+            # --- End JavaScript Component ---
+
         else:
             st.warning("未能找到与查询相关的文章。")
     else:

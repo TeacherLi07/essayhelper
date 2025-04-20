@@ -99,9 +99,28 @@ def initialize_database():
                     print(f"Skipping file {filename}: missing 'id' or 'content'.")
                     continue
 
+                # --- Serialize complex fields for Redis HSET ---
                 redis_key = f"article:{article_id}"
-                r.hset(redis_key, mapping=article_data)
-                print(f"Stored article {article_id} in Redis.")
+                save_data_redis = {}
+                for k, v in article_data.items():
+                    if isinstance(v, (dict, list)):
+                        try:
+                            save_data_redis[k] = json.dumps(v, ensure_ascii=False)
+                        except TypeError:
+                            print(f"Warning: Could not JSON serialize field '{k}' for Redis in {article_id}. Skipping field.")
+                            save_data_redis[k] = str(v) # Fallback
+                    else:
+                        save_data_redis[k] = v
+                # Filter out None values before saving
+                filtered_data_redis = {k: v for k, v in save_data_redis.items() if v is not None}
+                # --- End Serialization ---
+
+                if filtered_data_redis:
+                    r.hset(redis_key, mapping=filtered_data_redis)
+                    print(f"Stored article {article_id} in Redis.")
+                else:
+                    print(f"Skipping storing article {article_id} in Redis due to empty data after filtering/serialization.")
+                    continue # Skip embedding if data couldn't be stored properly
 
                 print(f"Generating embedding for {article_id}...")
                 embedding = get_embedding(content)
