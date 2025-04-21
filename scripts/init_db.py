@@ -11,8 +11,8 @@ load_dotenv(dotenv_path=".env", verbose=True)
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD") # Load Redis password
-FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", "./faiss_index.idx")
-DATA_PATH = os.getenv("DATA_PATH", "./data") # Assuming data is stored in files first
+FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", "../essay_data/faiss_index.idx")
+DATA_PATH = os.getenv("DATA_PATH", "../essay_data/data") # Assuming data is stored in files first
 BAAI_API_KEY = os.getenv("BAAI_API_KEY") # Needed if using SiliconFlow or similar
 
 # Updated embedding function using SiliconFlow API

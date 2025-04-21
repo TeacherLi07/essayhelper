@@ -82,6 +82,7 @@ def display_search_results(search_results: list):
     Args:
         search_results (list): 包含搜索结果字典的列表。
     """
+    search_results.reverse()
     for i, result in enumerate(search_results):
         with st.container():
             # 确保 result 是字典类型
@@ -166,7 +167,7 @@ def display_sidebar(faiss_index, redis_conn):
         redis_conn: Redis 连接对象或 None。
     """
     with st.sidebar:
-        st.markdown("## 📋 使用指南")
+        # st.markdown("## 📋 使用指南")
         st.info(
             """
             **使用说明:**
@@ -207,17 +208,49 @@ def display_sidebar(faiss_index, redis_conn):
         st.markdown("---") # 分隔线
 
         st.markdown("## 🔧 系统状态")
-        # 显示 FAISS 索引状态
-        if faiss_index:
-            st.success(f"✅ 索引已加载 (共 {faiss_index.ntotal} 篇文章)")
-        else:
-            st.error("❌ 索引未加载")
 
-        # 显示 Redis 连接状态
+        # --- 获取缓存条数 ---
+        cache_count = 0
+        cache_status = "N/A" # 如果 Redis 不可用或查询失败的默认状态
         if redis_conn:
-            st.success("✅ Redis 数据库已连接")
+            try:
+                # --- 修改：使用正确的缓存键模式 --- 
+                # 使用 scan_iter 安全地迭代匹配 'cache:query:*' 模式的键
+                cache_keys_iterator = redis_conn.scan_iter(match='cache:query:*') 
+                # 计算迭代器中的项目数
+                cache_count = sum(1 for _ in cache_keys_iterator)
+                cache_status = f"💾 缓存 ({cache_count} 条)"
+            except Exception as e:
+                # 如果查询 Redis 出错，记录日志并显示错误状态
+                print(f"查询 Redis 缓存键数量时出错: {e}")
+                cache_status = "⚠️ 缓存查询失败"
         else:
-            st.error("❌ Redis 数据库未连接")
+             cache_status = "❓ 缓存 (Redis未连接)" # Redis 未连接时的状态
+
+        # --- 压缩系统状态显示 ---
+        faiss_status = f"✅ 索引 ({faiss_index.ntotal} 篇)" if faiss_index else "❌ 索引未加载"
+        redis_status = "✅ Redis" if redis_conn else "❌ Redis 未连接"
+
+        # 更新 caption 以包含缓存状态
+        st.caption(f"{faiss_status} | {redis_status} | {cache_status}")
+
+        st.markdown("---") # 分隔线
+
+        # --- 新增：赞助与支持区域 ---
+        st.markdown("## ❤️ 赞助与支持")
+        st.markdown("好用不？来稻香厅请我一顿？")
+        # 注意：请将 'app/assets/afdian_qr.png' 替换为你的实际二维码图片路径
+        # 注意：请将 'https://afdian.net/a/your_profile_id' 替换为你的实际爱发电链接
+        # qr_code_path = "app/assets/afdian_qr.png"
+        afdian_link = "https://afdian.com/a/tumbleweed" # 替换为你的爱发电链接
+
+        # if os.path.exists(qr_code_path):
+        #     st.image(qr_code_path, caption="爱发电赞助二维码", width=150) # 调整宽度
+        # else:
+        #     st.warning(f"⚠️ 未找到赞助二维码图片: {qr_code_path}")
+
+        st.markdown(f"[前往爱发电支持作者]({afdian_link})", unsafe_allow_html=True)
+        # --- 赞助与支持区域结束 ---
 
         st.markdown("---") # 分隔线
 

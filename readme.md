@@ -46,8 +46,8 @@ cp .env.example .env
 # - BAAI_API_KEY = your_silliconflow_key  (用于调用 BGE-M3 模型 API)
 # - REDIS_URL = redis://localhost:6379/0 (Redis 连接地址)
 # - REDIS_PASSWORD = your_redis_password (Redis 密码，如果没有则留空)
-# - DATA_PATH = ./data (存放爬虫下载的 JSON 数据文件的目录)
-# - FAISS_INDEX_PATH = ./faiss_index.idx (FAISS 索引文件保存路径)
+# - DATA_PATH = ../essay_data/data (存放爬虫下载的 JSON 数据文件的目录)
+# - FAISS_INDEX_PATH = ../essay_data/faiss_index.idx (FAISS 索引文件保存路径)
 
 # 数据初始化
 # 确保 DATA_PATH 目录下有爬取的 JSON 文件

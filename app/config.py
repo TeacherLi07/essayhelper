@@ -10,7 +10,7 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD") # 如果没有密码，此值为 None
 
 # FAISS 索引文件路径
-FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", "./faiss_index.idx") # 注意路径调整
+FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", "../essay_data/faiss_index.idx") # 注意路径调整
 
 # SiliconFlow API 密钥 (用于 BGE-M3 模型)
 # 注意：环境变量名称可能需要根据 .env 文件调整，这里使用 SF_API_KEY

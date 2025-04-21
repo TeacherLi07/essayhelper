@@ -241,4 +241,4 @@ class BjNewsCrawler:
 
 if __name__ == "__main__":
     crawler = BjNewsCrawler()
-    crawler.run(start_page=1, end_page=50, delay_list_fetch=3, delay_detail_fetch=7)
+    crawler.run(start_page=1, end_page=1, delay_list_fetch=3, delay_detail_fetch=7)
