@@ -6,6 +6,7 @@ from config import SUMMARY_TRUNCATE_LENGTH
 from feedback_utils import handle_feedback  # 使用相对导入
 
 
+@st.cache_resource
 def load_external_css(file_path):
     """
     加载外部 CSS 文件并应用到 Streamlit 应用。
@@ -25,6 +26,7 @@ def load_external_css(file_path):
         st.warning(f"CSS 文件未找到: {file_path}。自定义样式将不会应用。")
         print(f"CSS 文件未找到: {file_path}")
 
+@st.cache_data(show_spinner=False)
 def get_article_summary(result: dict) -> str:
     """
     从搜索结果字典中提取文章摘要。
@@ -248,7 +250,7 @@ def display_footer():
     """
     footer_html = """
     <div class="footer">
-        <p>© 2025 TeacherLi | 基于 BGE-M3 的议论文语义检索系统 | <a href="https://github.com/TeacherLi07/essayhelper" target="_blank">GitHub</a></p>
-    </div>
+        <p>© 2025 TeacherLi | 基于 BGE-M3 的议论文语义检索系统 | <a href="https://github.com/TeacherLi07/essayhelper" target="_blank">GitHub</a></p>iv>
     """
-    st.markdown(footer_html, unsafe_allow_html=True)
+    st.markdown(footer_html, unsafe_allow_html=True)    st.markdown(footer_html, unsafe_allow_html=True)
+
