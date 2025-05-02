@@ -16,10 +16,6 @@ FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", "../essay_data/faiss_index.idx"
 # 注意：环境变量名称可能需要根据 .env 文件调整，这里使用 SF_API_KEY
 BAAI_API_KEY = os.getenv("SF_API_KEY")
 
-# 搜索缓存和 FAISS 检索的最大 K 值
-# 即使前端请求的 k 值较小，缓存和 FAISS 检索也使用此值，以提高缓存命中率
-SEARCH_MAX_K = 30
-
 # 嵌入生成重试次数
 EMBEDDING_RETRIES = 3
 # 嵌入生成重试间隔（秒）

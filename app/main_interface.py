@@ -3,7 +3,6 @@ import os
 import streamlit.components.v1 as components # 确保导入 components
 
 # 从拆分出的模块导入所需函数和配置
-from config import SEARCH_MAX_K # 导入最大 K 值，虽然搜索函数内部使用，但主界面可能需要了解
 from storage import load_faiss_index, get_redis_connection
 from search import search_articles
 from ui_utils import (
@@ -62,7 +61,7 @@ with col2:
     num_results = st.slider(
         "返回文章数量:",
         min_value=1,
-        max_value=SEARCH_MAX_K, # 最大值使用配置中的 SEARCH_MAX_K
+        max_value=30, 
         value=10, # 默认值
         help="相关度由高到低排序",
         key="num_results_slider",
@@ -82,14 +81,12 @@ search_button = st.button(
 if search_button and query: # 只有点击按钮且查询不为空时执行
     with st.spinner("🧠 正在检索相关文章，请稍候..."):
         # 调用搜索函数
-        search_results, search_time, cache_hit = search_articles(
+        search_results, search_time = search_articles(
             query, faiss_index, faiss_id_map, redis_conn, k=num_results
         )
 
     # 显示搜索信息
-    if cache_hit:
-        st.info(f"✅ 缓存命中，在 {search_time:.2f} 秒内找到 {len(search_results)} 篇相关文章。")
-    elif search_results:
+    if search_results:
         st.success(f"✅ 在 {search_time:.2f} 秒内找到 {len(search_results)} 篇相关文章。")
 
     # 渲染结果或提示信息
@@ -97,7 +94,7 @@ if search_button and query: # 只有点击按钮且查询不为空时执行
         display_search_results(search_results)
         # 添加用于修复微信链接问题的脚本
         add_wechat_link_fix_script()
-    elif not cache_hit: # 仅在非缓存命中且无结果时显示未找到
+    else:
         st.warning("🤔 未能找到与您的查询高度相关的文章。请尝试调整关键词或论点表述。")
 
 elif search_button and not query: # 如果点击按钮但查询为空

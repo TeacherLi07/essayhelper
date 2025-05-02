@@ -209,30 +209,12 @@ def display_sidebar(faiss_index, redis_conn):
 
         st.markdown("## 🔧 系统状态")
 
-        # --- 获取缓存条数 ---
-        cache_count = 0
-        cache_status = "N/A" # 如果 Redis 不可用或查询失败的默认状态
-        if redis_conn:
-            try:
-                # --- 修改：使用正确的缓存键模式 --- 
-                # 使用 scan_iter 安全地迭代匹配 'cache:query:*' 模式的键
-                cache_keys_iterator = redis_conn.scan_iter(match='cache:query:*') 
-                # 计算迭代器中的项目数
-                cache_count = sum(1 for _ in cache_keys_iterator)
-                cache_status = f"💾 缓存 ({cache_count} 条)"
-            except Exception as e:
-                # 如果查询 Redis 出错，记录日志并显示错误状态
-                print(f"查询 Redis 缓存键数量时出错: {e}")
-                cache_status = "⚠️ 缓存查询失败"
-        else:
-             cache_status = "❓ 缓存 (Redis未连接)" # Redis 未连接时的状态
-
         # --- 压缩系统状态显示 ---
         faiss_status = f"✅ 索引 ({faiss_index.ntotal} 篇)" if faiss_index else "❌ 索引未加载"
         redis_status = "✅ Redis" if redis_conn else "❌ Redis 未连接"
 
-        # 更新 caption 以包含缓存状态
-        st.caption(f"{faiss_status} | {redis_status} | {cache_status}")
+        # 更新 caption 以包含状态
+        st.caption(f"{faiss_status} | {redis_status}")
 
         st.markdown("---") # 分隔线
 
